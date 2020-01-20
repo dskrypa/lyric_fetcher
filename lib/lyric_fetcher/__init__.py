@@ -16,8 +16,9 @@ from jinja2 import Environment as JinjaEnv, FileSystemLoader as JinjaFSLoader
 
 from ds_tools.caching import cached, FSCache
 from ds_tools.core import validate_or_make_dir, get_user_cache_dir
+from ds_tools.http.imitate import IMITATE_HEADERS
 from ds_tools.output import to_str, Table, SimpleColumn
-from ds_tools.utils import soupify, fix_html_prettify
+from ds_tools.utils.soup import soupify, fix_html_prettify
 from requests_client import RequestsClient
 
 __all__ = [
@@ -262,7 +263,7 @@ class TextFileLyricFetcher(LyricFetcher):
 
 class LyricsTranslateLyricFetcher(LyricFetcher):
     def __init__(self):
-        super().__init__('lyricstranslate.com', proto='https')
+        super().__init__('https://lyricstranslate.com')
 
     @cached(FSCache(cache_subdir='lyric_fetcher', prefix='search__', ext='html'), lock=True, key=FSCache.dated_html_key)
     def _search(self, artist, song=None):
@@ -302,7 +303,7 @@ class KlyricsLyricFetcher(LyricFetcher):
     _search_result_class = 'entry-title'
 
     def __init__(self):
-        super().__init__('klyrics.net', proto='https')
+        super().__init__('https://klyrics.net')
 
     def get_lyrics(self, song, title=None, *, kor_endpoint=None, eng_endpoint=None):
         lyrics = {'Korean': [], 'English': [], 'title': title}
@@ -352,7 +353,7 @@ class ColorCodedLyricFetcher(LyricFetcher):
     }
 
     def __init__(self):
-        super().__init__('colorcodedlyrics.com', proto='https')
+        super().__init__('https://colorcodedlyrics.com')
 
     def _format_index(self, query):
         endpoint = self.indexes.get(re.sub('[\[\]~!@#$%^&*(){}:;<>,.?/\\+= -]', '', query.lower()))
@@ -406,7 +407,7 @@ def exact_class_match(ele_name, css_class):
 
 class MusixMatchLyricFetcher(LyricFetcher):
     def __init__(self):
-        super().__init__('musixmatch.com', proto='https', imitate='firefox@win10')
+        super().__init__('https://musixmatch.com', headers=IMITATE_HEADERS['firefox72@win10'])
 
     def get_lyrics(self, song, title=None, *, kor_endpoint=None, eng_endpoint=None):
         song = song[:-1] if song.endswith('/') else song
