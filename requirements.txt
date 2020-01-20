@@ -1,5 +1,6 @@
 requests_client @ git+git://github.com/dskrypa/requests_client
 ds_tools @ git+git://github.com/dskrypa/ds_tools
+eventlet
 flask
 flask_socketio
 jinja2

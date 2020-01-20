@@ -13,6 +13,7 @@ import traceback
 from pathlib import Path
 from urllib.parse import urlencode
 
+import eventlet
 from flask import Flask, request, render_template, redirect, Response, url_for
 from flask_socketio import SocketIO
 from werkzeug.http import HTTP_STATUS_CODES as codes

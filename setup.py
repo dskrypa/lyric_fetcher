@@ -30,5 +30,5 @@ setup(
         'Programming Language :: Python :: 3.8'
     ],
     python_requires='~=3.4',
-    install_requires=['wheel'] + requirements
+    install_requires=requirements
 )
