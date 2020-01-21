@@ -9,8 +9,9 @@ import os
 import re
 from difflib import SequenceMatcher
 from itertools import chain
-from os.path import dirname, abspath
+from os.path import dirname
 from urllib.parse import urlsplit
+from pathlib import Path
 
 from jinja2 import Environment as JinjaEnv, FileSystemLoader as JinjaFSLoader
 
@@ -25,9 +26,9 @@ __all__ = [
     'normalize_lyrics', 'LyricFetcher', 'HybridLyricFetcher', 'TextFileLyricFetcher', 'LyricsTranslateLyricFetcher',
     'KlyricsLyricFetcher', 'ColorCodedLyricFetcher', 'MusixMatchLyricFetcher', 'SITE_CLASS_MAPPING', 'fix_links'
 ]
-log = logging.getLogger('ds_tools.lyric_fetcher')
+log = logging.getLogger(__name__)
 
-TMPL_DIR = os.path.join(dirname(dirname(dirname(abspath(__file__)))), 'flasks/lyric_fetcher/templates')
+TMPL_DIR = Path(__file__).resolve().parents[2].joinpath('templates').as_posix()
 
 
 def url_for_file(rel_path, filename=None):
