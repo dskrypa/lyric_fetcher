@@ -5,20 +5,23 @@ Flask server for cleaning up Korean to English translations of song lyrics to ma
 :author: Doug Skrypa
 """
 
+if __name__ == '__main__':
+    from gevent import monkey
+    monkey.patch_all()
+
 import argparse
 import logging
+import platform
 import socket
 import sys
 import traceback
 from pathlib import Path
 from urllib.parse import urlencode
 
-import eventlet
 from flask import Flask, request, render_template, redirect, Response, url_for
-from flask_socketio import SocketIO
 from werkzeug.http import HTTP_STATUS_CODES as codes
 
-from ds_tools.logging import init_logging
+from ds_tools.flasks.server import init_logging
 
 BASE_DIR = Path(__file__).resolve().parents[1]
 sys.path.append(BASE_DIR.joinpath('lib').as_posix())
@@ -35,6 +38,24 @@ app.config.update(PROPAGATE_EXCEPTIONS=True, JSONIFY_PRETTYPRINT_REGULAR=True)
 DEFAULT_SITE = 'colorcodedlyrics'
 SITES = list(SITE_CLASS_MAPPING.keys())
 fetchers = {site: fetcher_cls() for site, fetcher_cls in SITE_CLASS_MAPPING.items()}
+
+
+def main():
+    parser = argparse.ArgumentParser('Lyric Fetcher Flask Server')
+    parser.add_argument('--use_hostname', '-u', action='store_true', help='Use hostname instead of localhost/127.0.0.1')
+    parser.add_argument('--port', '-p', type=int, default=10000, help='Port to use')
+    parser.add_argument('--verbose', '-v', action='count', help='Print more verbose log info (may be specified multiple times to increase verbosity)')
+    args = parser.parse_args()
+    init_logging(None, args.verbose)
+
+    host = socket.gethostname() if args.use_hostname else None
+    if platform.system() == 'Windows':
+        from ds_tools.flasks.socketio_server import SocketIOServer as Server
+    else:
+        from ds_tools.flasks.gunicorn_server import GunicornServer as Server
+
+    server = Server(app, args.port, host)
+    server.start_server()
 
 
 @app.route('/')
@@ -54,8 +75,7 @@ def search():
             value = request.args.get(param)
         if value is not None:
             if isinstance(value, str):
-                value = value.strip()
-                if value:
+                if value := value.strip():
                     params[param] = value
             else:
                 params[param] = value
@@ -72,33 +92,26 @@ def search():
     index = params.get('index')                 # bool: show index results instead of search results
 
     form_values = {'query': query, 'sub_query': sub_query, 'site': site, 'index': index}
-    render_vars = {
-        'title': 'Lyric Fetcher - Search', 'form_values': form_values, 'sites': SITES
-    }
-
+    render_vars = {'title': 'Lyric Fetcher - Search', 'form_values': form_values, 'sites': SITES}
     if not query:
-        # noinspection PyUnresolvedReferences
-        return render_template('search.html', error='You must provide a valid query.', **render_vars)
+        render_vars['error'] = 'You must provide a valid query.'
     elif site not in fetchers:
-        # noinspection PyUnresolvedReferences
-        return render_template('search.html', error='Invalid site.', **render_vars)
-
-    fetcher = fetchers[site]
-    if index:
-        try:
-            results = fetcher.get_index_results(query)
-        except TypeError as e:
-            raise ResponseException(501, str(e))
+        render_vars['error'] = 'Invalid site.'
     else:
-        results = fetcher.get_search_results(query, sub_query)
+        fetcher = fetchers[site]
+        if index:
+            try:
+                results = fetcher.get_index_results(query)
+            except TypeError as e:
+                raise ResponseException(501, str(e))
+        else:
+            results = fetcher.get_search_results(query, sub_query)
 
-    fix_links(results)
-    if not results:
-        # noinspection PyUnresolvedReferences
-        return render_template('search.html', error='No results.', **render_vars)
+        render_vars['results'] = fix_links(results)
+        if not results:
+            render_vars['error'] = 'No results.'
 
-    # noinspection PyUnresolvedReferences
-    return render_template('search.html', results=results, **render_vars)
+    return render_template('search.html', **render_vars)
 
 
 @app.route('/song/<path:song>', methods=['GET'])
@@ -118,16 +131,16 @@ def song(song):
 
     max_stanzas = max(len(lang_stanzas) for lang_stanzas in stanzas.values())
     for lang, lang_stanzas in stanzas.items():
-        add_stanzas = max_stanzas - len(lang_stanzas)
-        if add_stanzas:
+        if add_stanzas := max_stanzas - len(lang_stanzas):
             for i in range(add_stanzas):
                 lang_stanzas.append([])
 
     render_vars = {
-        'title': alt_title or discovered_title or song, 'lyrics': stanzas, 'lang_order': ['Korean', 'Translation'],
-        'stanza_count': max_stanzas
+        'title': alt_title or discovered_title or song,
+        'lyrics': stanzas,
+        'lang_order': ['Korean', 'Translation'],
+        'stanza_count': max_stanzas,
     }
-    # noinspection PyUnresolvedReferences
     return render_template('song.html', **render_vars)
 
 
@@ -147,7 +160,6 @@ class ResponseException(Exception):
         return '{}: [{}] {}'.format(type(self).__name__, self.code, self.reason)
 
     def as_response(self):
-        # noinspection PyUnresolvedReferences
         rendered = render_template('layout.html', error_code=codes[self.code], error=self.reason)
         return Response(rendered, self.code)
 
@@ -158,27 +170,7 @@ def handle_response_exception(err):
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser('Lyric Fetcher Flask Server')
-    parser.add_argument('--use_hostname', '-u', action='store_true', help='Use hostname instead of localhost/127.0.0.1')
-    parser.add_argument('--port', '-p', type=int, default=10000, help='Port to use')
-    parser.add_argument('--verbose', '-v', action='count', help='Print more verbose log info (may be specified multiple times to increase verbosity)')
-    args = parser.parse_args()
-    init_logging(args.verbose, names=None, log_path=None)
-
-    flask_logger = logging.getLogger('flask.app')
-    for handler in logging.getLogger().handlers:
-        if handler.name == 'stderr':
-            flask_logger.addHandler(handler)
-            break
-
-    run_args = {'port': args.port}
-    if args.use_hostname:
-        run_args['host'] = socket.gethostname()
-
-    socketio = SocketIO(app, async_mode='eventlet')
     try:
-        socketio.run(app, **run_args)
-        # app.run(**run_args)
-    except Exception as e:
-        log.debug(traceback.format_exc())
-        log.error(e)
+        main()
+    except KeyboardInterrupt:
+        print()

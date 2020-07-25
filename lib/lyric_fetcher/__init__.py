@@ -43,9 +43,9 @@ def url_for_file(rel_path, filename=None):
 
 def fix_links(results):
     for result in results:
-        link = result['Link']
-        if link and link.startswith('/'):
+        if (link := result['Link']) and link.startswith('/'):
             result['Link'] = link[1:]
+    return results
 
 
 def normalize_lyrics(lyrics_by_lang, extra_linebreaks=None, extra_lines=None, replace_lb=False, ignore_len=False):

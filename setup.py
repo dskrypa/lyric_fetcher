@@ -1,13 +1,10 @@
 #!/usr/bin/env python
 
+import platform
 from pathlib import Path
 from setuptools import setup, find_packages
 
 project_root = Path(__file__).resolve().parent
-
-with project_root.joinpath('requirements.txt').open('r', encoding='utf-8') as f:
-    requirements = f.read().splitlines()
-
 with project_root.joinpath('readme.rst').open('r', encoding='utf-8') as f:
     long_description = f.read()
 
@@ -15,6 +12,16 @@ about = {}
 with project_root.joinpath('lib', '__version__.py').open('r', encoding='utf-8') as f:
     exec(f.read(), about)
 
+requirements = [
+    'requests_client@ git+git://github.com/dskrypa/requests_client',
+    'ds_tools@ git+git://github.com/dskrypa/ds_tools',
+    'flask',
+    'jinja2',
+    'werkzeug',
+    'lxml',
+    'gevent',
+    'flask_socketio' if platform.system() == 'Windows' else 'gunicorn',
+]
 
 setup(
     name=about['__title__'],
