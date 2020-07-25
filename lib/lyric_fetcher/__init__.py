@@ -12,7 +12,9 @@ from itertools import chain
 from os.path import dirname
 from urllib.parse import urlsplit
 from pathlib import Path
+from typing import TYPE_CHECKING, Union, List, Dict
 
+from bs4 import NavigableString
 from jinja2 import Environment as JinjaEnv, FileSystemLoader as JinjaFSLoader
 
 from ds_tools.caching import cached, FSCache
@@ -21,6 +23,9 @@ from ds_tools.http.imitate import IMITATE_HEADERS
 from ds_tools.output import to_str, Table, SimpleColumn
 from ds_tools.utils.soup import soupify, fix_html_prettify
 from requests_client import RequestsClient
+
+if TYPE_CHECKING:
+    from bs4 import BeautifulSoup
 
 __all__ = [
     'normalize_lyrics', 'LyricFetcher', 'HybridLyricFetcher', 'TextFileLyricFetcher', 'LyricsTranslateLyricFetcher',
@@ -357,7 +362,7 @@ class ColorCodedLyricFetcher(LyricFetcher):
         super().__init__('https://colorcodedlyrics.com')
 
     def _format_index(self, query):
-        endpoint = self.indexes.get(re.sub('[\[\]~!@#$%^&*(){}:;<>,.?/\\+= -]', '', query.lower()))
+        endpoint = self.indexes.get(re.sub(r'[\[\]~!@#$%^&*(){}:;<>,.?/\\+= -]', '', query.lower()))
         if not endpoint:
             raise ValueError('No index is configured for {}'.format(query))
         return endpoint
@@ -371,33 +376,57 @@ class ColorCodedLyricFetcher(LyricFetcher):
                 results.append({'Album': title, 'Song': a.text, 'Link': to_str(urlsplit(link).path[1:])})
         return results
 
-    def get_lyrics(self, song, title=None, *, kor_endpoint=None, eng_endpoint=None):
+    def get_lyrics(self, song, title=None, *, kor_endpoint=None, eng_endpoint=None) -> Dict[str, Union[str, List[str]]]:
+        log.debug(f'Getting lyrics for {song=!r}')
         html = soupify(self.get_page(song), 'lxml')
-        lyrics = {'Korean': [], 'English': [], 'title': title or html.find('h1', class_='entry-title').get_text()}
-        lang_names = {1: 'Korean', 2: 'English'}
+        lyrics = {
+            'Korean': [],
+            'English': [],
+            'title': title or html.find('h1', class_='entry-title').get_text(),
+        }
 
-        lang_row = html.find('th', text='Romanization').parent.next_sibling.next_sibling
-        for i, td in enumerate(lang_row.find_all('td')):
-            if i:   # Skip romanization
-                td_str = str(td)
-                td_str = td_str[:4] + '<p>' + td_str[4:]
-                fixed_td = soupify(re.sub('(?<!</p>|<td>)<p>', '</p><p>', td_str))
-
-                log.log(5, 'Fixed td:\n{}\n\n'.format(fixed_td))
-
-                for p in fixed_td.find_all('p'):
-                    lines = [l for l in p.get_text().replace('<br/>', '\n').splitlines() if l]
-                    for j, line in enumerate(lines):
-                        if line.startswith('<span'):
-                            lines[j] = soupify(line).find('span').get_text()
-
-                    lang = lang_names[i]
-                    log.log(9, '{}: found stanza with {} lines'.format(lang, len(lines)))
-                    lines.append('<br/>')
-
-                    lyrics[lang].extend(lines)
+        try:
+            lang_row = html.find('th', text='Romanization').parent.next_sibling.next_sibling
+        except AttributeError:
+            self._process_lyrics_nontable(html, lyrics)
+        else:
+            self._process_lyrics_table(lang_row, lyrics)
 
         return lyrics
+
+    def _process_lyrics_nontable(self, soup: 'BeautifulSoup', lyrics: Dict[str, List[str]]):
+        columns = soup.find_all('div', class_='wp-block-column is-vertically-aligned-top')
+        for lang, column in zip(('Korean', 'English'), columns[1:]):
+            column_data = []
+            container = column.find('div', class_='wp-block-group__inner-container')
+            for p in container.find_all('p'):  # type: BeautifulSoup
+                for ele in p.children:  # type: BeautifulSoup
+                    if ele.name == 'span':
+                        column_data.append(ele.get_text())
+                    elif ele.name == 'br':
+                        column_data.append('\n')
+                    elif isinstance(ele, NavigableString):
+                        column_data.append(ele)
+                column_data.append('\n<br/>\n')
+            lyric_str = ''.join(column_data)
+            lyrics[lang] = lyric_str.splitlines()
+            # log.debug(f'Lyrics for {lang=!r}:\n{lyric_str}')
+
+    def _process_lyrics_table(self, lang_row, lyrics):
+        for lang, td in zip(('Korean', 'English'), lang_row.find_all('td')[1:]):
+            td_str = str(td)
+            td_str = td_str[:4] + '<p>' + td_str[4:]
+            fixed_td = soupify(re.sub('(?<!</p>|<td>)<p>', '</p><p>', td_str))
+            log.log(5, 'Fixed td:\n{}\n\n'.format(fixed_td))
+            for p in fixed_td.find_all('p'):
+                lines = [l for l in p.get_text().replace('<br/>', '\n').splitlines() if l]
+                for j, line in enumerate(lines):
+                    if line.startswith('<span'):
+                        lines[j] = soupify(line).find('span').get_text()
+
+                log.log(9, '{}: found stanza with {} lines'.format(lang, len(lines)))
+                lines.append('<br/>')
+                lyrics[lang].extend(lines)
 
 
 def exact_class_match(ele_name, css_class):

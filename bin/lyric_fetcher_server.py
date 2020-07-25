@@ -160,7 +160,7 @@ def handle_response_exception(err):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser('Lyric Fetcher Flask Server')
     parser.add_argument('--use_hostname', '-u', action='store_true', help='Use hostname instead of localhost/127.0.0.1')
-    parser.add_argument('--port', '-p', type=int, help='Port to use')
+    parser.add_argument('--port', '-p', type=int, default=10000, help='Port to use')
     parser.add_argument('--verbose', '-v', action='count', help='Print more verbose log info (may be specified multiple times to increase verbosity)')
     args = parser.parse_args()
     init_logging(args.verbose, names=None, log_path=None)
