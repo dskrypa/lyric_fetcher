@@ -17,7 +17,8 @@ from typing import TYPE_CHECKING, Union, List, Dict
 from bs4 import NavigableString
 from jinja2 import Environment as JinjaEnv, FileSystemLoader as JinjaFSLoader
 
-from ds_tools.caching import cached, FSCache
+from ds_tools.caching.caches import FSCache
+from ds_tools.caching.decorate import cached
 from ds_tools.fs.paths import validate_or_make_dir, get_user_cache_dir
 from ds_tools.http.imitate import IMITATE_HEADERS
 from ds_tools.output import to_str, Table, SimpleColumn
