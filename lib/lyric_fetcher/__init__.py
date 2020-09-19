@@ -18,7 +18,7 @@ from bs4 import NavigableString
 from jinja2 import Environment as JinjaEnv, FileSystemLoader as JinjaFSLoader
 
 from ds_tools.caching import cached, FSCache
-from ds_tools.core import validate_or_make_dir, get_user_cache_dir
+from ds_tools.fs.paths import validate_or_make_dir, get_user_cache_dir
 from ds_tools.http.imitate import IMITATE_HEADERS
 from ds_tools.output import to_str, Table, SimpleColumn
 from ds_tools.utils.soup import soupify, fix_html_prettify
