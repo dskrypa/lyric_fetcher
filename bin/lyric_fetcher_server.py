@@ -46,7 +46,7 @@ def main():
     parser.add_argument('--port', '-p', type=int, default=10000, help='Port to use')
     parser.add_argument('--verbose', '-v', action='count', help='Print more verbose log info (may be specified multiple times to increase verbosity)')
     args = parser.parse_args()
-    init_logging(None, args.verbose)
+    init_logging(None, args.verbose or 2)
 
     host = socket.gethostname() if args.use_hostname else None
     if platform.system() == 'Windows':

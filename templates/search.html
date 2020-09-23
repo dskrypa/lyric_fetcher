@@ -67,7 +67,7 @@
             {% for row in results %}
                 <tr>
                     {% if row.get("Album") %}<td>{{ row["Album"] }}</td>{% endif %}
-                    <td><a href="{{ url_for('song', song=row['Link']) }}">{{ row["Song"] }}</a></td>
+                    <td><a href="{{ url_for('song', song=row['Link']) }}?site={{ form_values['site'] }}">{{ row["Song"] }}</a></td>
                 </tr>
             {% endfor %}
         </tbody>

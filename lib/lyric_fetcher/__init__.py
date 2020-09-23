@@ -21,7 +21,8 @@ from ds_tools.caching.caches import FSCache
 from ds_tools.caching.decorate import cached
 from ds_tools.fs.paths import validate_or_make_dir, get_user_cache_dir
 from ds_tools.http.imitate import IMITATE_HEADERS
-from ds_tools.output import to_str, Table, SimpleColumn
+from ds_tools.output.formatting import to_str
+from ds_tools.output.table import Table, SimpleColumn
 from ds_tools.utils.soup import soupify, fix_html_prettify
 from requests_client import RequestsClient
 
@@ -138,7 +139,7 @@ class LyricFetcher(RequestsClient):
             fix_links(filtered)
             tbl.print_rows(filtered)
 
-    def get_lyrics(self, song, title=None, *, kor_endpoint=None, eng_endpoint=None):
+    def get_lyrics(self, song, title=None, *, kor_endpoint=None, eng_endpoint=None) -> Dict[str, Union[str, List[str]]]:
         """
         :param str|None song: Song endpoint for lyrics
         :param str title: Title to use (overrides automatically-extracted title is specified)
@@ -146,7 +147,7 @@ class LyricFetcher(RequestsClient):
         :param str eng_endpoint: Endpoint from which English lyrics should be retrieved
         :return dict: Mapping of {'Korean': list(lyrics), 'English': list(lyrics), 'title': title}
         """
-        raise TypeError('get_lyrics() is not implemented for {}'.format(self.host))
+        raise TypeError(f'get_lyrics() is not implemented for {self.host}')
 
     def get_korean_lyrics(self, song):
         lyrics = self.get_lyrics(song)
@@ -430,17 +431,15 @@ class ColorCodedLyricFetcher(LyricFetcher):
                 lyrics[lang].extend(lines)
 
 
-def exact_class_match(ele_name, css_class):
-    def func(ele):
-        return ele.name == ele_name and {css_class} == set(ele.get('class', []))
-    return func
+def lyric_part_match(ele):
+    return ele.name == 'div' and not ele.get('class') and str(ele).startswith('<div class=')
 
 
 class MusixMatchLyricFetcher(LyricFetcher):
     def __init__(self):
         super().__init__('https://musixmatch.com', headers=IMITATE_HEADERS['firefox72@win10'])
 
-    def get_lyrics(self, song, title=None, *, kor_endpoint=None, eng_endpoint=None):
+    def get_lyrics(self, song, title=None, *, kor_endpoint=None, eng_endpoint=None) -> Dict[str, Union[str, List[str]]]:
         song = song[:-1] if song.endswith('/') else song
         if not song.endswith('/translation/english'):
             song += '/translation/english'
@@ -455,10 +454,13 @@ class MusixMatchLyricFetcher(LyricFetcher):
 
         container = html.find('div', class_='mxm-track-lyrics-container')
         for row in container.find_all('div', class_='mxm-translatable-line-readonly'):
+            # log.debug(f'Found {row=}')
             last_i = -1
-            for i, div in enumerate(row.find_all(exact_class_match('div', ''))):
+            for i, div in enumerate(row.find_all(lyric_part_match)):
+                # TODO: Need to add newlines between stanzas
                 lang = lang_names[i]
                 text = div.get_text() or '<br/>'
+                # log.debug(f'Found {lang=} {text=}')
                 lyrics[lang].append(text)
                 last_i = i
 
