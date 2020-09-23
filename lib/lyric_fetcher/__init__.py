@@ -66,10 +66,13 @@ def normalize_lyrics(lyrics_by_lang, extra_linebreaks=None, extra_lines=None, re
 
         stanza = []
         for i, line in enumerate(chain(lang_lyrics, extra_lyrics.get(lang, []))):
-            if (line == '<br/>') or (i in lb_set):
+            is_br = line == '<br/>'
+            if is_br or (i in lb_set):
                 if stanza:
                     stanzas[lang].append(stanza)
                     stanza = []
+                if not is_br:
+                    stanza.append(line)
             elif line.strip():
                 stanza.append(line)
 

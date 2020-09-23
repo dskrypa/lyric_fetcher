@@ -82,7 +82,7 @@ def parser():
 # noinspection PyTypeChecker
 def main():
     args = parser().parse_args(req_subparser_value=True)
-    init_logging(args.verbose, log_path=None)
+    init_logging(args.verbose, log_path=None, names=None)
 
     if args.action == 'file_get':
         args.action = 'hybrid_get'
