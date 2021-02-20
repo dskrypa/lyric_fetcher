@@ -1,0 +1,36 @@
+{% extends "layout.html" %}
+{% block body %}
+
+<style>
+.form_field {white-space: pre-wrap;}
+</style>
+
+<h1>{{ title }}</h1>
+<br/>
+<h2><a href="{{ original_url }}">(original)</a></h2>
+<br/>
+<form id="reformat_form" action="{{ url_for('lyric_fetcher.reformatted') }}" method="post" autocomplete="off">
+    <table id="form_wrapper" style="margin: auto; text-align: center;">
+        <tbody>
+            <tr>
+                {% for lang in lang_order %}
+                    <th>{{ lang }}</th>
+                {% endfor %}
+            </tr>
+
+            <tr>
+                {% for lang in lang_order %}
+                    <td>
+                        <textarea class="form_field" name="{{ lang }}" rows="{{ max_lines }}" cols="80" required>{{ lyrics[lang] }}</textarea>
+                    </td>
+                {% endfor %}
+            </tr>
+            <tr><td><br/></td><td><br/></td></tr>
+        </tbody>
+    </table>
+    <br/>
+    <input class="form_field" type="text" style="display: none !important;" name="title" value="{{ title }}" />
+    <input type="submit" value="Submit" style="width: 100px; margin: auto; display: block;" />
+</form>
+
+{% endblock %}

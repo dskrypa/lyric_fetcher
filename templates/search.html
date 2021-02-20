@@ -3,7 +3,7 @@
 
 <h1>{{ title }}</h1>
 <br/>
-<form id="fetcher_form" action="{{ url_for('search') }}" method="post" autocomplete="off">
+<form id="fetcher_form" action="{{ url_for('lyric_fetcher.search') }}" method="post" autocomplete="off">
     <table id="form_wrapper" style="margin: auto; text-align: center;">
         <tr>
             <td>
@@ -67,7 +67,7 @@
             {% for row in results %}
                 <tr>
                     {% if row.get("Album") %}<td>{{ row["Album"] }}</td>{% endif %}
-                    <td><a href="{{ url_for('song', song=row['Link']) }}?site={{ form_values['site'] }}">{{ row["Song"] }}</a></td>
+                    <td><a href="{{ url_for('lyric_fetcher.song', song_endpoint=row['Link']) }}?site={{ form_values['site'] }}">{{ row["Song"] }}</a></td>
                 </tr>
             {% endfor %}
         </tbody>
