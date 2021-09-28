@@ -136,7 +136,8 @@ class ColorCodedLyricFetcher(LyricFetcher, site='https://colorcodedlyrics.com'):
         }
 
         try:
-            lang_row = html.find('th', text='Romanization').parent.next_sibling.next_sibling
+            sibling = html.find('th', text='Romanization').parent.next_sibling
+            lang_row = sibling.next_sibling or sibling
         except AttributeError:
             self._process_lyrics_nontable(html, lyrics)
         else:
