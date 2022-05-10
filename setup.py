@@ -5,16 +5,15 @@ from pathlib import Path
 from setuptools import setup, find_packages
 
 project_root = Path(__file__).resolve().parent
-with project_root.joinpath('readme.rst').open('r', encoding='utf-8') as f:
-    long_description = f.read()
+long_description = project_root.joinpath('readme.rst').read_text('utf-8')
 
 about = {}
 with project_root.joinpath('lib', '__version__.py').open('r', encoding='utf-8') as f:
     exec(f.read(), about)
 
 requirements = [
-    'requests_client@ git+git://github.com/dskrypa/requests_client',
-    'ds_tools@ git+git://github.com/dskrypa/ds_tools',
+    'requests_client@ git+https://github.com/dskrypa/requests_client',
+    'ds_tools@ git+https://github.com/dskrypa/ds_tools',
     'flask',
     'jinja2',
     'werkzeug',

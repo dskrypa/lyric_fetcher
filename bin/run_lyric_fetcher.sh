@@ -25,10 +25,10 @@ else
     VIRTUAL_ENV="$proj_root/venv"
     export PATH="$VIRTUAL_ENV/bin:$PATH"
     firefox_path=firefox
-    py_path="$proj_root"/venv/python
+    py_path="$proj_root"/venv/bin/python
 fi
 export VIRTUAL_ENV
-echo $VIRTUAL_ENV
+echo "$VIRTUAL_ENV"
 
 # unset PYTHONHOME if set
 # this will fail if PYTHONHOME is set to the empty string (which is bad anyway)
