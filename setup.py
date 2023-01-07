@@ -14,6 +14,7 @@ with project_root.joinpath('lib', '__version__.py').open('r', encoding='utf-8') 
 requirements = [
     'requests_client@ git+https://github.com/dskrypa/requests_client',
     'ds_tools@ git+https://github.com/dskrypa/ds_tools',
+    'cli-command-parser',
     'flask',
     'jinja2',
     'werkzeug',

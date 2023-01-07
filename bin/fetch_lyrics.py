@@ -7,143 +7,186 @@ Fetch Korean lyrics and fix the html to make them easier to print
 
 import logging
 import sys
+from abc import ABC
+from dataclasses import dataclass
 from pathlib import Path
 
-from ds_tools.argparsing import ArgParser
-from ds_tools.logging import init_logging
+from cli_command_parser import Command, Option, Positional, SubCommand, Flag, Counter, main
+from ds_tools.caching.decorators import cached_property
 
 sys.path.append(Path(__file__).resolve().parents[1].joinpath('lib').as_posix())
 from lyric_fetcher import SITE_CLASS_MAPPING, HybridLyricFetcher
 
 log = logging.getLogger(__name__)
 
-DEFAULT_SITE = 'colorcodedlyrics'
+SITE_NAMES = sorted(SITE_CLASS_MAPPING)
 
 
-def parser():
-    site_names = sorted(SITE_CLASS_MAPPING.keys())
-    parser = ArgParser(description='Lyric Fetcher')
+class LyricFetcherCli(Command, description='Lyric Fetcher'):
+    sub_cmd = SubCommand()
+    verbose = Counter('-v', help='Increase logging verbosity (can specify multiple times)')
 
-    list_parser = parser.add_subparser('action', 'list', 'List available sites')
+    def _init_command_(self):
+        from ds_tools.logging import init_logging
 
-    get_parser = parser.add_subparser('action', 'get', 'Retrieve lyrics from a particular page from a single site')
-    get_parser.add_argument('song', nargs='+', help='One or more endpoints that contain lyrics for particular songs')
-    get_parser.add_argument('--title', '-t', help='Page title to use (default: extracted from lyric page)')
-    get_parser.add_argument('--size', '-z', type=int, default=12, help='Font size to use for output')
-    get_parser.add_argument('--ignore_len', '-i', action='store_true', help='Ignore stanza length match')
-    get_parser.add_argument('--output', '-o', help='Output directory to store the lyrics')
-    get_parser.add_argument('--linebreaks', '-lb', nargs='+', help='Additional linebreaks to use to split stanzas')
-    get_parser.add_argument('--replace_lb', '-R', action='store_true', help='Replace existing linebreaks')
-
-    search_parser = parser.add_subparser('action', 'search', 'Search for lyric pages')
-    search_parser.add_argument('query', help='Query to run')
-    search_parser.add_argument('--sub_query', '-q', help='Sub-query to run')
-
-    index_parser = parser.add_subparser('action', 'index', 'View lyric page endpoints from an artist\'s index page')
-    index_parser.add_argument('index', help='Name of the index to view')
-    index_parser.add_argument('--album_filter', '-af', help='Filter for albums to be displayed')
-    index_parser.add_argument('--list', '-L', action='store_true', help='List albums instead of song links (default: %(default)s)')
-
-    cmp_parser = parser.add_subparser('action', 'compare', 'Compare lyrics from separate songs for common phrases, etc')
-    cmp_parser.add_argument('song_1', help='One or more endpoints that contain lyrics for particular songs')
-    cmp_parser.add_argument('song_2', help='One or more endpoints that contain lyrics for particular songs')
-
-    for _parser in (get_parser, search_parser, index_parser, cmp_parser):
-        _parser.add_argument('--site', '-s', choices=site_names, default=DEFAULT_SITE, help='Site to use (default: %(default)s)')
-
-    hybrid_parser = parser.add_subparser('action', 'hybrid_get', 'Retrieve lyrics from two separate sites and merge them')
-    hybrid_parser.add_argument('--korean_site', '-ks', choices=site_names, help='Site from which Korean lyrics should be retrieved', required=True)
-    hybrid_parser.add_argument('--english_site', '-es', choices=site_names, help='Site from which the English translation should be retrieved', required=True)
-    hybrid_parser.add_argument('--korean_endpoint', '-ke', help='Site from which Korean lyrics should be retrieved', required=True)
-    hybrid_parser.add_argument('--english_endpoint', '-ee', help='Site from which the English translation should be retrieved', required=True)
-
-    hybrid_parser.add_argument('--title', '-t', help='Page title to use (default: last part of song endpoint)')
-    hybrid_parser.add_argument('--size', '-z', type=int, default=12, help='Font size to use for output')
-    hybrid_parser.add_argument('--ignore_len', '-i', action='store_true', help='Ignore stanza length match')
-    hybrid_parser.add_argument('--output', '-o', help='Output directory to store the lyrics')
-
-    hybrid_parser.add_argument('--english_lb', '-el', nargs='+', help='Additional linebreaks to use to split English stanzas')
-    hybrid_parser.add_argument('--korean_lb', '-kl', nargs='+', help='Additional linebreaks to use to split Korean stanzas')
-
-    hybrid_parser.add_argument('--english_extra', '-ex', nargs='+', help='Additional lines to add to the English stanzas at the end')
-    hybrid_parser.add_argument('--korean_extra', '-kx', nargs='+', help='Additional lines to add to the Korean stanzas at the end')
-
-    file_parser = parser.add_subparser('action', 'file_get', 'Retrieve lyrics from two separate text files and merge them')
-    file_parser.add_argument('--korean', '-k', metavar='PATH', help='Path to a text file containing Korean lyrics')
-    file_parser.add_argument('--english', '-e', metavar='PATH', help='Path to a text file containing the English translation')
-    file_parser.add_argument('--title', '-t', help='Page title to use', required=True)
-    file_parser.add_argument('--size', '-z', type=int, default=12, help='Font size to use for output')
-    file_parser.add_argument('--output', '-o', help='Output directory to store the processed lyrics')
-
-    parser.include_common_args('verbosity')
-    return parser
+        init_logging(self.verbose, log_path=None, names=None)
 
 
-# noinspection PyTypeChecker
-def main():
-    args = parser().parse_args(req_subparser_value=True)
-    init_logging(args.verbose, log_path=None, names=None)
-
-    if args.action == 'file_get':
-        args.action = 'hybrid_get'
-        args.korean_site = 'file'
-        args.english_site = 'file'
-        args.korean_endpoint = args.korean
-        args.english_endpoint = args.english
-        args.english_lb = None
-        args.korean_lb = None
-        args.ignore_len = None
-        args.english_extra = None
-        args.korean_extra = None
-
-    if args.action == 'list':
-        for site in sorted(SITE_CLASS_MAPPING.keys()):
+class List(LyricFetcherCli, help='List available sites'):
+    def main(self):
+        for site in SITE_NAMES:
             print(site)
-    elif args.action in ('get', 'search', 'index', 'compare'):
+
+
+class SingleSiteCommand(LyricFetcherCli, ABC):
+    site = Option('-s', choices=SITE_NAMES, default='colorcodedlyrics', help='Site to use')
+
+    @cached_property
+    def lyric_fetcher(self):
         try:
-            lf = SITE_CLASS_MAPPING[args.site]()
+            return SITE_CLASS_MAPPING[self.site]()
         except KeyError as e:
-            raise ValueError('Unconfigured site: {}'.format(args.site)) from e
+            raise ValueError(f'Invalid site: {self.site}') from e
 
-        if args.action == 'search':
-            lf.print_search_results(args.query, args.sub_query)
-        elif args.action == 'index':
-            lf.print_index_results(args.index, args.album_filter, args.list)
-        elif args.action == 'get':
-            linebreaks = {int(str(val).strip()) for val in args.linebreaks or []}
-            extra_linebreaks = {'English': linebreaks, 'Korean': linebreaks}
-            for song in args.song:
-                lf.process_lyrics(
-                    song, args.title, args.size, args.ignore_len, args.output,
-                    extra_linebreaks=extra_linebreaks, replace_lb=args.replace_lb
-                )
-        elif args.action == 'compare':
-            lf.compare_lyrics(args.song_1, args.song_2)
+
+class Get(SingleSiteCommand, help='Retrieve lyrics from a particular page from a single site'):
+    song = Positional(nargs='+', help='One or more endpoints that contain lyrics for particular songs')
+    title = Option('-t', help='Page title to use (default: extracted from lyric page)')
+    size: int = Option('-z', default=12, help='Font size to use for output')
+    ignore_len = Flag('-i', help='Ignore stanza length match')
+    output = Option('-o', help='Output directory to store the lyrics')
+    linebreaks = Option('-lb', nargs='+', help='Additional linebreaks to use to split stanzas')
+    replace_lb = Flag('-R', help='Replace existing linebreaks')
+
+    def main(self):
+        linebreaks = {int(str(val).strip()) for val in self.linebreaks or []}
+        extra_linebreaks = {'English': linebreaks, 'Korean': linebreaks}
+        for song in self.song:
+            self.lyric_fetcher.process_lyrics(
+                song, self.title, self.size, self.ignore_len, self.output,
+                extra_linebreaks=extra_linebreaks, replace_lb=self.replace_lb
+            )
+
+
+class Search(SingleSiteCommand, help='Search for lyric pages'):
+    query = Positional(help='Query to run')
+    sub_query = Option('-q', help='Sub-query to run')
+
+    def main(self):
+        from ds_tools.output.table import Table, SimpleColumn
+        from lyric_fetcher.utils import fix_links
+
+        results = self.lyric_fetcher.get_search_results(self.query, self.sub_query)
+        tbl = Table(SimpleColumn('Link'), SimpleColumn('Song'), update_width=True)
+        fix_links(results)
+        tbl.print_rows(results)
+
+
+class Index(SingleSiteCommand, help='View lyric page endpoints from an artist\'s index page'):
+    index = Positional(help='Name of the index to view')
+    album_filter = Option('-af', help='Filter for albums to be displayed')
+    list = Flag('-L', help='List albums instead of song links')
+
+    def main(self):
+        import re
+        from ds_tools.output.table import Table, SimpleColumn as Column
+        from lyric_fetcher.utils import fix_links
+
+        results = self.lyric_fetcher.get_index_results(self.index)
+        if album_filter := self.album_filter:
+            alb_filter = re.compile(album_filter)
+            results = [r for r in results if r['Album'] and alb_filter.search(r['Album'])]
+
+        if self.list:
+            for album in sorted({r['Album'] for r in results if r['Album']}):
+                print(album)
         else:
-            raise ValueError('Unconfigured action: {}'.format(args.action))
-    elif args.action == 'hybrid_get':
-        fetchers = {}
-        for lang in ('korean', 'english'):
-            site = getattr(args, lang + '_site')
-            try:
-                fetchers[lang] = SITE_CLASS_MAPPING[site]()
-            except KeyError as e:
-                raise ValueError('Unconfigured site for {} lyrics: {}'.format(lang.title(), site)) from e
+            fix_links(results)
+            Table(Column('Album'), Column('Link'), Column('Song'), update_width=True).print_rows(results)
 
-        hlf = HybridLyricFetcher(fetchers['korean'], fetchers['english'])
 
-        extra_linebreaks = {
-            'English': {int(str(val).strip()) for val in args.english_lb or []},
-            'Korean': {int(str(val).strip()) for val in args.korean_lb or []}
-        }
-        extra_lines = {'English': args.english_extra or [], 'Korean': args.korean_extra or []}
-        hlf.process_lyrics(
-            None, args.title, args.size, args.ignore_len, args.output,
-            kor_endpoint=args.korean_endpoint, eng_endpoint=args.english_endpoint,
-            extra_linebreaks=extra_linebreaks, extra_lines=extra_lines
+class Compare(SingleSiteCommand, help='Compare lyrics from separate songs for common phrases, etc'):
+    song_1 = Positional(help='One or more endpoints that contain lyrics for particular songs')
+    song_2 = Positional(help='One or more endpoints that contain lyrics for particular songs')
+
+    def main(self):
+        self.lyric_fetcher.compare_lyrics(self.song_1, self.song_2)
+
+
+class HybridGet(LyricFetcherCli, help='Retrieve lyrics from two separate sites and merge them'):
+    korean_site = Option('-ks', choices=SITE_NAMES, help='Site from which Korean lyrics should be retrieved', required=True)
+    english_site = Option('-es', choices=SITE_NAMES, help='Site from which the English translation should be retrieved', required=True)
+    korean_endpoint = Option('-ke', help='Site from which Korean lyrics should be retrieved', required=True)
+    english_endpoint = Option('-ee', help='Site from which the English translation should be retrieved', required=True)
+
+    title = Option('-t', help='Page title to use (default: last part of song endpoint)')
+    size: int = Option('-z', default=12, help='Font size to use for output')
+    ignore_len = Flag('-i', help='Ignore stanza length match')
+    output = Option('-o', help='Output directory to store the lyrics')
+
+    english_lb = Option('-el', nargs='+', help='Additional linebreaks to use to split English stanzas')
+    korean_lb = Option('-kl', nargs='+', help='Additional linebreaks to use to split Korean stanzas')
+
+    english_extra = Option('-ex', nargs='+', help='Additional lines to add to the English stanzas at the end')
+    korean_extra = Option('-kx', nargs='+', help='Additional lines to add to the Korean stanzas at the end')
+
+    def main(self):
+        params = FetcherParams(
+            self.title, self.output, self.korean_site, self.english_site, self.korean_endpoint, self.english_endpoint,
+            self.size, self.ignore_len, self.korean_lb, self.english_lb, self.korean_extra, self.english_extra
         )
-    else:
-        raise ValueError('Unconfigured action: {}'.format(args.action))
+        hybrid_get(params)
+
+
+class FileGet(LyricFetcherCli, help='Retrieve lyrics from two separate text files and merge them'):
+    korean = Option('-k', metavar='PATH', help='Path to a text file containing Korean lyrics')
+    english = Option('-e', metavar='PATH', help='Path to a text file containing the English translation')
+    title = Option('-t', help='Page title to use (default: last part of song endpoint)')
+    size: int = Option('-z', default=12, help='Font size to use for output')
+    output = Option('-o', help='Output directory to store the lyrics')
+
+    def main(self):
+        params = FetcherParams(self.title, self.output, 'file', 'file', self.korean, self.english, self.size)
+        hybrid_get(params)
+
+
+@dataclass
+class FetcherParams:
+    title: str
+    output: str
+    korean_site: str
+    english_site: str
+    korean_endpoint: str
+    english_endpoint: str
+    size: int
+    ignore_len: bool = None
+    korean_lb: list[str | int] = None
+    english_lb: list[str | int] = None
+    korean_extra: list[str] = None
+    english_extra: list[str] = None
+
+
+def hybrid_get(params: FetcherParams):
+    fetchers = {}
+    for lang in ('korean', 'english'):
+        site = getattr(params, lang + '_site')
+        try:
+            fetchers[lang] = SITE_CLASS_MAPPING[site]()
+        except KeyError as e:
+            raise ValueError(f'Invalid site for {lang.title()} lyrics: {site}') from e
+
+    hlf = HybridLyricFetcher(fetchers['korean'], fetchers['english'])
+
+    extra_linebreaks = {
+        'English': {int(str(val).strip()) for val in params.english_lb or []},
+        'Korean': {int(str(val).strip()) for val in params.korean_lb or []}
+    }
+    extra_lines = {'English': params.english_extra or [], 'Korean': params.korean_extra or []}
+    hlf.process_lyrics(
+        None, params.title, params.size, params.ignore_len, params.output,
+        kor_endpoint=params.korean_endpoint, eng_endpoint=params.english_endpoint,
+        extra_linebreaks=extra_linebreaks, extra_lines=extra_lines
+    )
 
 
 if __name__ == '__main__':
