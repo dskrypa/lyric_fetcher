@@ -6,17 +6,41 @@ Utils for processing lyrics.
 
 from __future__ import annotations
 
+import json
 import logging
 import os
+from datetime import datetime
+from hashlib import sha256
 from itertools import chain
 from os.path import dirname
 from pathlib import Path
-from typing import Optional, Collection
+from typing import TYPE_CHECKING, Collection
+from urllib.parse import urlencode, quote as url_quote
 
-__all__ = ['TMPL_DIR', 'url_for_file', 'fix_links', 'normalize_lyrics', 'lyric_part_match', 'StanzaMismatch']
+from bs4 import BeautifulSoup
+
+if TYPE_CHECKING:
+    from .base import LyricFetcher
+
+__all__ = [
+    'TMPL_DIR', 'url_for_file', 'fix_links', 'normalize_lyrics', 'lyric_part_match', 'StanzaMismatch', 'soupify',
+    'dated_html_key', 'html_key',
+]
 log = logging.getLogger(__name__)
 
 TMPL_DIR = Path(__file__).resolve().parents[2].joinpath('templates').as_posix()
+
+LangLyrics = dict[str, list[str]]
+LineNums = dict[str, Collection[int]]
+
+
+def soupify(html, mode: str = 'html.parser', *args, **kwargs) -> BeautifulSoup:
+    if not isinstance(html, str):
+        try:
+            html = html.text
+        except AttributeError as e:
+            raise TypeError('Only strings or Requests library response objects are supported') from e
+    return BeautifulSoup(html, mode, *args, **kwargs)
 
 
 def url_for_file(rel_path, filename=None):
@@ -45,9 +69,9 @@ class StanzaMismatch(Exception):
 
 
 def normalize_lyrics(
-    lyrics_by_lang: dict[str, list[str]],
-    extra_linebreaks: Optional[dict[str, Collection[int]]] = None,
-    extra_lines: Optional[dict[str, Collection[int]]] = None,
+    lyrics_by_lang: LangLyrics,
+    extra_linebreaks: LineNums = None,
+    extra_lines: LineNums = None,
     replace_lb: bool = False,
     ignore_len: bool = False,
 ) -> dict[str, list[list[str]]]:
@@ -94,3 +118,24 @@ def normalize_lyrics(
             raise StanzaMismatch(msg, stanzas)
 
     return stanzas
+
+
+def dated_html_key(fetcher: LyricFetcher, endpoint: str, *args, **kwargs) -> str:
+    date_str = datetime.now().strftime('%Y-%m-%d')
+    uri_path_str = url_quote(endpoint, '')
+    return f'{fetcher.client.host}__{date_str}__{uri_path_str}'
+
+
+def html_key(fetcher: LyricFetcher, endpoint: str, *args, **kwargs) -> str:
+    key_parts = [fetcher.client.host, endpoint.replace('/', '_')]
+    extras = {}
+    for arg, name in (('params', 'query'), ('data', 'data'), ('json', 'json')):
+        if value := kwargs.get(arg):
+            try:
+                value = sorted(value.items())
+            except AttributeError:
+                pass
+            extras[name] = urlencode(value, True)
+    if extras:  # Without the below hash, the extras could result in filenames that were too large
+        key_parts.append(sha256(json.dumps(extras, sort_keys=True).encode('utf-8')).hexdigest())
+    return '__'.join(key_parts)
