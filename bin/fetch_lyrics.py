@@ -110,7 +110,25 @@ class Compare(SingleSiteCommand, help='Compare lyrics from separate songs for co
     song_2 = Positional(help='One or more endpoints that contain lyrics for particular songs')
 
     def main(self):
-        self.lyric_fetcher.compare_lyrics(self.song_1, self.song_2)
+        import re
+        from difflib import SequenceMatcher
+
+        ws_sub = re.compile(r'\s+').sub
+        lyrics = (self.lyric_fetcher.get_lyrics(self.song_1), self.lyric_fetcher.get_lyrics(self.song_2))
+        lyrics = [
+            ws_sub(' ', ' '.join(line for line in song['Korean'] if line != '<br/>'))
+            for song in lyrics
+        ]
+
+        seqs = set()
+        sm = SequenceMatcher(None, *lyrics)
+        for block in sm.get_matching_blocks():
+            seq = lyrics[0][block.a: block.a + block.size]
+            if (' ' in seq) and (len(seq.strip()) >= 3):
+                seqs.add(seq)
+
+        for seq in sorted(seqs, key=lambda x: len(x), reverse=True):
+            print(seq)
 
 
 class HybridGet(LyricFetcherCli, help='Retrieve lyrics from two separate sites and merge them'):
