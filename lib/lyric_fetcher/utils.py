@@ -4,12 +4,14 @@ Utils for processing lyrics.
 :author: Doug Skrypa
 """
 
+from __future__ import annotations
+
 import logging
 import os
 from itertools import chain
 from os.path import dirname
 from pathlib import Path
-from typing import List, Dict, Optional, Collection
+from typing import Optional, Collection
 
 __all__ = ['TMPL_DIR', 'url_for_file', 'fix_links', 'normalize_lyrics', 'lyric_part_match', 'StanzaMismatch']
 log = logging.getLogger(__name__)
@@ -34,7 +36,7 @@ def lyric_part_match(ele):
 
 
 class StanzaMismatch(Exception):
-    def __init__(self, msg: str, all_stanzas: Dict[str, List[str]]):
+    def __init__(self, msg: str, all_stanzas: dict[str, list[str]]):
         super().__init__(msg)
         self.stanzas = {
             lang: '\n\n'.join('\n'.join(stanza) for stanza in stanza_lists) for lang, stanza_lists in all_stanzas.items()
@@ -43,12 +45,12 @@ class StanzaMismatch(Exception):
 
 
 def normalize_lyrics(
-    lyrics_by_lang: Dict[str, List[str]],
-    extra_linebreaks: Optional[Dict[str, Collection[int]]] = None,
-    extra_lines: Optional[Dict[str, Collection[int]]] = None,
+    lyrics_by_lang: dict[str, list[str]],
+    extra_linebreaks: Optional[dict[str, Collection[int]]] = None,
+    extra_lines: Optional[dict[str, Collection[int]]] = None,
     replace_lb: bool = False,
     ignore_len: bool = False,
-) -> Dict[str, List[List[str]]]:
+) -> dict[str, list[list[str]]]:
     linebreaks = {lang: set(lang_lb) for lang, lang_lb in extra_linebreaks.items()} if extra_linebreaks else {}
     extra_lyrics = {lang: lang_lines for lang, lang_lines in extra_lines.items()} if extra_lines else {}
     stanzas = {lang: [] for lang in lyrics_by_lang}

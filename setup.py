@@ -35,9 +35,9 @@ setup(
     classifiers=[
         'License :: OSI Approved :: Apache Software License',
         'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 3.8',
+        'Programming Language :: Python :: 3.10',
     ],
-    python_requires='~=3.8',
+    python_requires='~=3.10',
     install_requires=requirements,
     extras_require={'dev': ['pre-commit', 'ipython']}
 )

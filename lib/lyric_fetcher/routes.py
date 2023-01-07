@@ -4,11 +4,13 @@ Flask routes and related functions for the lyric fetcher
 :author: Doug Skrypa
 """
 
+from __future__ import annotations
+
 import json
 import logging
 import traceback
 from pathlib import Path
-from typing import Dict, Any, List
+from typing import Any
 from urllib.parse import urlencode
 
 from flask import request, render_template, redirect, Response, url_for, Blueprint
@@ -22,7 +24,7 @@ log = logging.getLogger(__name__)
 
 DEFAULT_SITE = 'colorcodedlyrics'
 SITES = list(SITE_CLASS_MAPPING.keys())
-FETCHERS = {site: fetcher_cls() for site, fetcher_cls in SITE_CLASS_MAPPING.items()}  # type: Dict[str, LyricFetcher]
+FETCHERS = {site: fetcher_cls() for site, fetcher_cls in SITE_CLASS_MAPPING.items()}  # type: dict[str, LyricFetcher]
 
 BASE_DIR = Path(__file__).resolve().parents[2]
 blueprint = Blueprint(
@@ -118,7 +120,7 @@ def song(song_endpoint: str):
     return render_song(title, stanzas)
 
 
-def render_song(title: str, stanzas: Dict[str, List[List[str]]]):
+def render_song(title: str, stanzas: dict[str, list[list[str]]]):
     max_stanzas = max(len(lang_stanzas) for lang_stanzas in stanzas.values())
     for lang, lang_stanzas in stanzas.items():
         if add_stanzas := max_stanzas - len(lang_stanzas):
@@ -159,7 +161,7 @@ def handle_response_exception(err):
     return err.as_response()
 
 
-def parse_params(*param_keys: str) -> Dict[str, Any]:
+def parse_params(*param_keys: str) -> dict[str, Any]:
     params = {}
     for param in param_keys:
         value = request.form.get(param)
@@ -174,7 +176,7 @@ def parse_params(*param_keys: str) -> Dict[str, Any]:
     return params
 
 
-def redirect_to_get(to_method: str, params: Dict[str, Any]):
+def redirect_to_get(to_method: str, params: dict[str, Any]):
     redirect_to = url_for(to_method)
     if params:
         redirect_to += '?' + urlencode(params, True)

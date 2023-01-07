@@ -4,12 +4,14 @@ Fetch Korean lyrics and fix the html to make them easier to print
 :author: Doug Skrypa
 """
 
+from __future__ import annotations
+
 import logging
 import os
 import re
 from difflib import SequenceMatcher
 from urllib.parse import urlsplit
-from typing import Union, List, Dict, Optional
+from typing import Union, Optional, Any
 
 from jinja2 import Environment as JinjaEnv, FileSystemLoader as JinjaFSLoader
 
@@ -82,7 +84,7 @@ class LyricFetcher(RequestsClient):
     def get_song_url(self, song: str) -> str:
         return self.url_for(song)
 
-    def get_lyrics(self, song, title=None, *, kor_endpoint=None, eng_endpoint=None) -> Dict[str, Union[str, List[str]]]:
+    def get_lyrics(self, song, title=None, *, kor_endpoint=None, eng_endpoint=None) -> dict[str, Union[str, list[str]]]:
         """
         :param str|None song: Song endpoint for lyrics
         :param str title: Title to use (overrides automatically-extracted title is specified)
@@ -174,9 +176,13 @@ class LyricFetcher(RequestsClient):
     def get_page(self, endpoint, **kwargs):
         return self.get(endpoint, **kwargs).text
 
+    def search_path_and_params(self, query_0, query_1=None) -> tuple[str, dict[str, Any]]:
+        return '/', {'s': query_0}
+
     @cached(FSCache(cache_subdir='lyric_fetcher', prefix='search__', ext='html'), lock=True, key=FSCache.dated_html_key)
     def _search(self, query_0, query_1=None):
-        return self.get('/', params={'s': query_0}).text
+        path, params = self.search_path_and_params(query_0, query_1)
+        return self.get(path, params=params).text
 
     @cached(FSCache(cache_subdir='lyric_fetcher', prefix='index__', ext='html'), lock=True, key=FSCache.dated_html_key)
     def _index(self, endpoint, **kwargs):
