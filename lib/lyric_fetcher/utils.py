@@ -11,7 +11,7 @@ import logging
 import os
 from datetime import datetime
 from hashlib import sha256
-from itertools import chain
+from itertools import chain, zip_longest
 from os.path import dirname
 from pathlib import Path
 from typing import TYPE_CHECKING, Collection
@@ -68,56 +68,92 @@ class StanzaMismatch(Exception):
         self.max_lines = max(stanza.count('\n') for stanza in self.stanzas.values())
 
 
-def normalize_lyrics(
-    lyrics_by_lang: LangLyrics,
-    extra_linebreaks: LineNums = None,
-    extra_lines: LineNums = None,
-    replace_lb: bool = False,
-    ignore_len: bool = False,
-) -> dict[str, list[list[str]]]:
-    linebreaks = {lang: set(lang_lb) for lang, lang_lb in extra_linebreaks.items()} if extra_linebreaks else {}
-    extra_lyrics = {lang: lang_lines for lang, lang_lines in extra_lines.items()} if extra_lines else {}
-    stanzas = {lang: [] for lang in lyrics_by_lang}
+class LyricNormalizer:
+    __slots__ = ('lang_lyrics_map', 'replace_line_breaks', 'line_breaks', 'extra_lyrics')
 
-    for lang, lang_lyrics in lyrics_by_lang.items():
-        lb_set = linebreaks.get(lang, set())
-        if replace_lb:
+    def __init__(
+        self,
+        lang_lyrics_map: dict[str, list[str | list[str]]],
+        add_linebreaks: LineNums = None,
+        add_lines: LangLyrics = None,
+        replace_line_breaks: bool = False,
+    ):
+        self.lang_lyrics_map = lang_lyrics_map
+        self.replace_line_breaks = replace_line_breaks
+        if add_linebreaks:
+            self.line_breaks = {lang: set(lang_lb) for lang, lang_lb in add_linebreaks.items()}
+        else:
+            self.line_breaks = {}
+        if add_lines:
+            self.extra_lyrics = {lang: lang_lines for lang, lang_lines in add_lines.items()}
+        else:
+            self.extra_lyrics = {}
+
+    def normalize(self, ignore_len: bool = False) -> dict[str, list[list[str]]]:
+        stanzas = {
+            lang: [stanza for stanza in self._iter_stanzas(lang, lang_lyrics)]
+            for lang, lang_lyrics in self.lang_lyrics_map.items()
+        }
+
+        stanza_lengths = {lang: len(lang_stanzas) for lang, lang_stanzas in stanzas.items()}
+        if len(set(stanza_lengths.values())) == 1:
+            return stanzas
+
+        error_msg = f'Stanza lengths do not match: {stanza_lengths}'
+        log.warning(error_msg)
+
+        (lang_a, stanzas_a), (lang_b, stanzas_b) = sorted(stanzas.items())
+        for i, (a, b) in enumerate(zip_longest(map(len, stanzas_a), map(len, stanzas_b), fillvalue=0)):
+            log.log(19, f'Stanza {i:3d}: {lang_a}={a:3d}, {lang_b}={b:3d}')
+
+        # for lang, lang_lines in sorted(self.lang_lyrics_map.items()):
+        #     log.log(19, f'{lang}:')
+        #     for line in lang_lines:
+        #         log.log(19, line)
+        #     log.log(19, '')
+
+        if not ignore_len:
+            raise StanzaMismatch(error_msg, stanzas)
+
+        return stanzas
+
+    def _iter_stanzas(self, lang: str, lang_lyrics: list[str | list[str]]):
+        lb_set = self.line_breaks.get(lang, set())
+        if self.replace_line_breaks:
             lang_lyrics = [line for line in lang_lyrics if line != '<br/>']
+
         lyric_len = len(lang_lyrics)
         for lb in list(lb_set):
             if lb < 0:
                 lb_set.add(lyric_len + lb)
 
+        lines = chain(lang_lyrics, self.extra_lyrics.get(lang, []))
         stanza = []
-        for i, line in enumerate(map(str.strip, chain(lang_lyrics, extra_lyrics.get(lang, [])))):
-            is_br = line == '<br/>'
-            if is_br or (i in lb_set):
+        for i, line in enumerate(lines):
+            if isinstance(line, list):
                 if stanza:
-                    stanzas[lang].append(stanza)
+                    yield stanza
+                    stanza = []
+                yield line
+            elif line := line.strip():
+                if ((is_br := line == '<br/>') or i in lb_set) and stanza:
+                    yield stanza
                     stanza = []
                 if not is_br:
                     stanza.append(line)
-            elif line:
-                stanza.append(line)
 
         if stanza:
-            stanzas[lang].append(stanza)
+            yield stanza
 
-    stanza_lengths = {lang: len(lang_stanzas) for lang, lang_stanzas in stanzas.items()}
-    if len(set(stanza_lengths.values())) != 1:
-        for lang, lang_lines in sorted(lyrics_by_lang.items()):
-            log.log(19, '{}:'.format(lang))
-            for line in lang_lines:
-                log.log(19, line)
-            log.log(19, '')
 
-        msg = 'Stanza lengths don\'t match: {}'.format(stanza_lengths)
-        if ignore_len:
-            log.warning(msg)
-        else:
-            raise StanzaMismatch(msg, stanzas)
-
-    return stanzas
+def normalize_lyrics(
+    lyrics_by_lang: LangLyrics,
+    extra_linebreaks: LineNums = None,
+    extra_lines: LangLyrics = None,
+    replace_lb: bool = False,
+    ignore_len: bool = False,
+) -> dict[str, list[list[str]]]:
+    return LyricNormalizer(lyrics_by_lang, extra_linebreaks, extra_lines, replace_lb).normalize(ignore_len)
 
 
 def dated_html_key(fetcher: LyricFetcher, endpoint: str, *args, **kwargs) -> str:

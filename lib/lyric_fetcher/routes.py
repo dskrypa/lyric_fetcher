@@ -18,7 +18,7 @@ from werkzeug.http import HTTP_STATUS_CODES as codes
 
 from . import SITE_CLASS_MAPPING
 from .base import LyricFetcher
-from .utils import normalize_lyrics, fix_links, StanzaMismatch
+from .utils import fix_links, StanzaMismatch, LyricNormalizer
 
 log = logging.getLogger(__name__)
 
@@ -105,7 +105,7 @@ def song(song_endpoint: str):
     discovered_title = lyrics.pop('title', None)
     title = alt_title or discovered_title or song_endpoint
     try:
-        stanzas = normalize_lyrics(lyrics, ignore_len=ignore_len)
+        stanzas = LyricNormalizer(lyrics).normalize(ignore_len)
     except StanzaMismatch as e:
         render_vars = {
             'title': title,

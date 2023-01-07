@@ -16,6 +16,7 @@ requirements = [
     'ds_tools@ git+https://github.com/dskrypa/ds_tools',
     'cli-command-parser',
     'flask',
+    'html5lib',
     'jinja2',
     'werkzeug',
     'lxml',
