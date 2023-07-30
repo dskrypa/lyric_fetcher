@@ -1,5 +1,5 @@
 """
-
+Base lyric processor for converting HTML into a simpler layout/format for easier printing.
 """
 
 from __future__ import annotations
@@ -16,6 +16,8 @@ from .utils import soupify
 
 __all__ = ['LyricProcessor', 'LyricStanzas', 'get_tag_text']
 log = logging.getLogger(__name__)
+iter_text_log = logging.getLogger(f'{__name__}.iter_text')
+iter_text_log.setLevel(logging.CRITICAL)
 
 LyricStanzas = list[list[str]]
 LyricResults = dict[str, Union[str, list[str]]]
@@ -31,6 +33,7 @@ class LyricProcessor(ABC):
     site: str
     html: str
     title: str | None
+    ignore_br: bool = False
 
     def __init_subclass__(cls, site: str = None, **kwargs):
         super().__init_subclass__(**kwargs)
@@ -81,13 +84,16 @@ class LyricProcessor(ABC):
         return {'Korean': self.get_korean(), 'English': self.get_english(), 'title': self.get_title()}
 
 
-def get_tag_text(tag: Tag) -> str:
-    return ''.join(_iter_text(tag))
+def get_tag_text(tag: Tag, ignore_br: bool = False) -> str:
+    iter_text_log.debug(f'Beginning get_tag_text for tag={id(tag)}', extra={'color': 11})
+    tag_text = ''.join(_iter_text(tag, ignore_br))
+    iter_text_log.debug(f'Finished get_tag_text for tag={id(tag)}', extra={'color': 11})
+    return tag_text
 
 
-def _iter_text(tag: Tag) -> Iterator[str]:
+def _iter_text(tag: Tag, ignore_br: bool = False) -> Iterator[str]:
     if not (children := tag.contents):
-        # log.debug('Found tag with no children')
+        iter_text_log.debug('Found tag with no children')
         yield '\n'
         return
 
@@ -95,24 +101,32 @@ def _iter_text(tag: Tag) -> Iterator[str]:
     for child in children:
         if isinstance(child, Tag):
             if (name := child.name) == 'br':
-                # log.debug(f'Found <br/>')
-                yield '\n'
+                if ignore_br:
+                    iter_text_log.debug(f'Found <br/>, but ignoring it', extra={'color': 12})
+                else:
+                    iter_text_log.debug(f'Found <br/>', extra={'color': 13})
+                    yield '\n'
                 continue
 
             # if the tag is a block type tag then yield new lines before & after
             if is_block_element := name not in inline_names:
-                # log.debug(f'In block element {name=} ========================================')
+                iter_text_log.debug(
+                    f'In block element {name=} ========================================', extra={'color': 13}
+                )
                 yield '\n'
-            # else:
-            #     log.debug(f'In inline element {name=} ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~')
-            yield from _iter_text(child)
+            else:
+                iter_text_log.debug(f'In inline element {name=} ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~')
+
+            yield from _iter_text(child, ignore_br)
             if is_block_element:
-                # log.debug(f'End of block element {name=} ========================================')
+                iter_text_log.debug(
+                    f'End of block element {name=} ========================================', extra={'color': 13}
+                )
                 yield '\n'
-            # else:
-            #     log.debug(f'End of inline element {name=} ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~')
+            else:
+                iter_text_log.debug(f'End of inline element {name=} ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~')
         elif isinstance(child, NavigableString):
-            # log.debug(f'Found text={child!r}')
+            iter_text_log.debug(f'Found text={child!r}')
             yield child
-        # else:
-        #     log.warning(f'IGNORING ELEMENT: {child=}')
+        else:
+            iter_text_log.warning(f'IGNORING ELEMENT: {child=}')

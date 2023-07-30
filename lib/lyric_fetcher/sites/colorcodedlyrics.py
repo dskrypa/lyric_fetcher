@@ -143,7 +143,14 @@ class CCLProcessor(LyricProcessor, site=SITE):
 
     @cached_property
     def _lang_columns(self) -> list[Tag]:  # romanized, korean, english
-        return [col for col in self.soup.select('.wp-block-column') if col.select('strong .has-inline-color')]
+        if columns := [col for col in self.soup.select('.wp-block-column') if col.select('strong .has-inline-color')]:
+            return columns
+        elif tables := self.soup.find_all('table'):
+            self.ignore_br = True
+            table = tables[-1]
+            return [table.select(f'tr td:nth-child({c})')[0] for c in range(1, 4)]
+        else:
+            raise RuntimeError('Unable to find any language columns')
 
     def get_korean_raw(self) -> Tag:
         return copy(self._lang_columns[1])
@@ -152,7 +159,7 @@ class CCLProcessor(LyricProcessor, site=SITE):
         return copy(self._lang_columns[2])
 
     def process_lang_lyrics(self, raw_lyrics: Tag) -> LyricStanzas:
-        text = get_tag_text(raw_lyrics).strip()
+        text = get_tag_text(raw_lyrics, ignore_br=self.ignore_br).strip()
         # line = '=' * 120
         # log.info(f'Processed lyrics:\n{line}\n{text}\n{line}')
 
