@@ -6,15 +6,12 @@ Fetch Korean lyrics and fix the html to make them easier to print
 """
 
 import logging
-import sys
 from abc import ABC
 from dataclasses import dataclass
-from pathlib import Path
 
 from cli_command_parser import Command, Option, Positional, SubCommand, Flag, Counter, main
 from ds_tools.caching.decorators import cached_property
 
-sys.path.append(Path(__file__).resolve().parents[1].joinpath('lib').as_posix())
 from lyric_fetcher import SITE_CLASS_MAPPING, HybridLyricFetcher
 
 log = logging.getLogger(__name__)

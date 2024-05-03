@@ -1,8 +1,7 @@
-
 __title__ = 'lyric_fetcher'
 __description__ = 'Lyric Fetcher'
 __url__ = 'https://github.com/dskrypa/lyric_fetcher'
-__version__ = '2023.07.30'
+__version__ = '2024.05.03'
 __author__ = 'Doug Skrypa'
 __author_email__ = 'dskrypa@gmail.com'
-__copyright__ = 'Copyright 2020 Doug Skrypa'
+__copyright__ = 'Copyright 2024 Doug Skrypa'
